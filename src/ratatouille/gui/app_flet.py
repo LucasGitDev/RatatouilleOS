@@ -38,6 +38,7 @@ class KitchenPage:
         self.page.title = "RatatouilleOS — Flet"
         self.page.horizontal_alignment = ft.MainAxisAlignment.CENTER
         self.page.vertical_alignment = ft.MainAxisAlignment.START
+        self.page.scroll = ft.ScrollMode.AUTO
 
         # Controls
         self.algo = ft.Dropdown(options=[ft.dropdown.Option("fcfs"), ft.dropdown.Option("sjf")], value="sjf", width=140)
