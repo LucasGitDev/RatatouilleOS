@@ -44,7 +44,7 @@ def generate_jobs(config: WorkloadConfig) -> List[Job]:
         raise ValueError("cook_time_dist inválido")
 
     jobs = [
-        Job(id=i, arrival_time=float(arrivals[i]), cook_time=float(cook_times[i]))
+        Job(id=i+1, arrival_time=float(arrivals[i]), cook_time=float(cook_times[i]))
         for i in range(config.num_jobs)
     ]
     return jobs
