@@ -30,7 +30,8 @@ class Job:
 @dataclass(slots=True)
 class Event:
     timestamp: float
-    kind: str  # e.g., "job_start", "job_finish", "collision"
+    kind: str  # e.g., "job_start", "job_finish", "collision", "chef_pick"
     job_id: Optional[int] = None
+    chef_id: Optional[int] = None
 
 

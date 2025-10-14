@@ -11,6 +11,7 @@ python = "^3.11"
 numpy = "^2.1.0"
 pandas = "^2.2.0"
 matplotlib = "^3.9.0"
+flet = "^0.24.1"
 
 [tool.poetry.group.dev.dependencies]
 jupyter = "^1.0.0"
@@ -20,6 +21,7 @@ mypy = "^1.11.0"
 
 [tool.poetry.scripts]
 ratatouille = "ratatouille.main:main"
+ratatouille-flet = "ratatouille.gui.app_flet:main"
 
 [build-system]
 requires = ["poetry-core>=1.8.0"]

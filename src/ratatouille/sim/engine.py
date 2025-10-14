@@ -72,6 +72,8 @@ def run_simulation(jobs: List[Job], config: RunConfig) -> RunResult:
         # Semáforo: só um job pode usar o fogão por vez
         if config.use_semaphore:
             job = picked[0]
+            # Chef mais simples: índice 0 neste tick
+            events.append(Event(timestamp=current_time, kind="chef_pick", job_id=job.id, chef_id=0))
             job.start_time = current_time
             events.append(Event(timestamp=current_time, kind="job_start", job_id=job.id))
             current_time += job.cook_time
@@ -84,12 +86,16 @@ def run_simulation(jobs: List[Job], config: RunConfig) -> RunResult:
                 collisions += len(picked) - 1
             max_finish = current_time
             for job in picked:
+                events.append(Event(timestamp=current_time, kind="chef_pick", job_id=job.id, chef_id=0))
                 job.start_time = current_time
                 events.append(Event(timestamp=current_time, kind="job_start", job_id=job.id))
                 finish = current_time + job.cook_time
                 max_finish = max(max_finish, finish)
                 job.finish_time = finish
                 events.append(Event(timestamp=finish, kind="job_finish", job_id=job.id))
+            if len(picked) > 1:
+                # Evento explícito de colisão para visual
+                events.append(Event(timestamp=current_time, kind="collision", job_id=None, chef_id=None))
             current_time = max_finish
 
     # Utilização do fogão: total de tempo ocupado / makespan
