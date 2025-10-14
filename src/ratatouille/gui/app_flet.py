@@ -77,6 +77,34 @@ class KitchenPage:
         self.job_dots: Dict[int, ft.Container] = {}
         self.chefs: Dict[int, ft.Container] = {}
         self.collisions_count: int = 0
+        self.jobs_info: Dict[int, dict] = {}
+        # Sorting state for table
+        self.sort_key: str = "id"  # id | ready | start
+        self.sort_desc: bool = False
+
+        # Table area
+        self.sort_row = ft.Row(
+            controls=[
+                ft.Text("Ordenar por:"),
+                ft.ElevatedButton("ID", on_click=lambda _: self._set_sort("id")),
+                ft.ElevatedButton("Fila (ready)", on_click=lambda _: self._set_sort("ready")),
+                ft.ElevatedButton("Execução (start)", on_click=lambda _: self._set_sort("start")),
+            ],
+            alignment=ft.MainAxisAlignment.CENTER,
+        )
+        self.table = ft.DataTable(columns=[
+            ft.DataColumn(ft.Text("Ordem Fila")),
+            ft.DataColumn(ft.Text("Ordem Exec.")),
+            ft.DataColumn(ft.Text("ID")),
+            ft.DataColumn(ft.Text("Chegada")),
+            ft.DataColumn(ft.Text("Pronto (ready)")),
+            ft.DataColumn(ft.Text("Início")),
+            ft.DataColumn(ft.Text("Fim")),
+            ft.DataColumn(ft.Text("Espera")),
+            ft.DataColumn(ft.Text("Turnaround")),
+            ft.DataColumn(ft.Text("Cozinho")),
+        ], rows=[])
+        self.page.add(self.sort_row, self.table)
         # Chef avatar
         chef = ft.Container(left=self.stove_x - 40, top=200, width=32, height=32, bgcolor="#8E44AD", border_radius=6,
                             content=ft.Text("Chef", color="white", size=10), alignment=ft.alignment.center)
@@ -105,7 +133,7 @@ class KitchenPage:
         self.collisions_count = 0
         self._update_collision_chip()
         # jobs info map
-        self.jobs_info = {j.id: {"arrival": j.arrival_time, "cook": j.cook_time, "start": j.start_time, "finish": j.finish_time} for j in jobs}
+        self.jobs_info = {j.id: {"arrival": j.arrival_time, "ready": j.ready_time, "cook": j.cook_time, "start": j.start_time, "finish": j.finish_time} for j in jobs}
         self.job_dots.clear()
         # Create dots
         ids = sorted({e.job_id for e in self.events if e.job_id is not None and e.job_id >= 0})
@@ -121,6 +149,8 @@ class KitchenPage:
         self.page.update()
         self.t0 = time.time()
         self.page.run_task(self._tick)
+        # build table
+        self._rebuild_table()
 
     async def _tick(self) -> None:
         while self.running:
@@ -170,6 +200,9 @@ class KitchenPage:
             else:
                 dot.left = self.done_x - 12
             self._set_stove_status(occupied=False)
+        # update table once finishes may change
+        if ev.kind in ("job_start", "job_finish"):
+            self._rebuild_table()
 
     def _set_stove_status(self, occupied: bool) -> None:
         if occupied:
@@ -179,6 +212,70 @@ class KitchenPage:
     
     def _update_collision_chip(self) -> None:
         self.status.controls[1] = ft.Chip(label=ft.Text(f"Colisões: {self.collisions_count}"), bgcolor="#ffebee", color="#b71c1c")
+
+    def _set_sort(self, key: str) -> None:
+        if self.sort_key == key:
+            self.sort_desc = not self.sort_desc
+        else:
+            self.sort_key = key
+            self.sort_desc = False
+        self._rebuild_table()
+
+    def _rebuild_table(self) -> None:
+        # Build list with computed order indexes
+        jobs = []
+        for jid, info in self.jobs_info.items():
+            arrival = info.get("arrival")
+            ready = info.get("ready", info.get("arrival"))
+            start = info.get("start")
+            finish = info.get("finish")
+            cook = info.get("cook")
+            wait = (start - ready) if (start is not None and ready is not None) else None
+            turn = (finish - arrival) if (finish is not None and arrival is not None) else None
+            jobs.append({
+                "jid": jid,
+                "arrival": arrival,
+                "ready": ready,
+                "start": start,
+                "finish": finish,
+                "wait": wait,
+                "turn": turn,
+                "cook": cook,
+            })
+        # compute orders
+        by_ready = sorted(jobs, key=lambda x: (float('inf') if x["ready"] is None else x["ready"], x["jid"]))
+        ready_rank = {row["jid"]: i+1 for i, row in enumerate(by_ready)}
+        by_start = sorted(jobs, key=lambda x: (float('inf') if x["start"] is None else x["start"], x["jid"]))
+        start_rank = {row["jid"]: i+1 for i, row in enumerate(by_start)}
+        # sort table view
+        keymap = {
+            "id": lambda x: (x["jid"]),
+            "ready": lambda x: (float('inf') if x["ready"] is None else x["ready"], x["jid"]),
+            "start": lambda x: (float('inf') if x["start"] is None else x["start"], x["jid"]),
+        }
+        sorted_jobs = sorted(jobs, key=keymap.get(self.sort_key, keymap["id"]), reverse=self.sort_desc)
+        # rows
+        rows: list[ft.DataRow] = []
+        for r in sorted_jobs:
+            rows.append(ft.DataRow(cells=[
+                ft.DataCell(ft.Text(str(ready_rank.get(r["jid"], "-")))) ,
+                ft.DataCell(ft.Text(str(start_rank.get(r["jid"], "-")))) ,
+                ft.DataCell(ft.Text(str(r["jid"]))),
+                ft.DataCell(ft.Text(f"{r['arrival']:.2f}" if r['arrival'] is not None else "-")),
+                ft.DataCell(ft.Text(f"{r['ready']:.2f}" if r['ready'] is not None else "-")),
+                ft.DataCell(ft.Text(f"{r['start']:.2f}" if r['start'] is not None else "-")),
+                ft.DataCell(ft.Text(f"{r['finish']:.2f}" if r['finish'] is not None else "-")),
+                ft.DataCell(ft.Text(f"{r['wait']:.2f}" if r['wait'] is not None else "-")),
+                ft.DataCell(ft.Text(f"{r['turn']:.2f}" if r['turn'] is not None else "-")),
+                ft.DataCell(ft.Text(f"{r['cook']:.2f}" if r['cook'] is not None else "-")),
+            ]))
+        self.table.rows = rows
+        # Atualiza a tabela imediatamente
+        try:
+            self.table.update()
+        except Exception:
+            # fallback
+            self.page.update()
 
 
 def main() -> None:
