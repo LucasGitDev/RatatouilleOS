@@ -72,9 +72,9 @@ def run_simulation(jobs: List[Job], config: RunConfig) -> RunResult:
         # Semáforo: só um job pode usar o fogão por vez
         if config.use_semaphore:
             job = picked[0]
-            # Devolve demais jobs para a fila, já que apenas 1 pode usar o fogão
-            for rest in picked[1:]:
-                sched.push(rest)
+            # Devolve demais jobs para o INÍCIO da fila, mantendo ordem FCFS
+            for rest in reversed(picked[1:]):  # reversed para manter ordem
+                sched.push_front(rest)
             # Chef mais simples: índice 0 neste tick
             events.append(Event(timestamp=current_time, kind="chef_pick", job_id=job.id, chef_id=0))
             job.start_time = current_time

@@ -13,6 +13,10 @@ class SJFScheduler:
     def push(self, job: Job) -> None:
         heapq.heappush(self._heap, (job.cook_time, job.id, job))
 
+    def push_front(self, job: Job) -> None:
+        """Para SJF, push_front é equivalente a push, pois a heap reorganiza por prioridade"""
+        self.push(job)
+
     def pop(self) -> Optional[Job]:
         if not self._heap:
             return None

@@ -20,7 +20,7 @@ class AnimationEvent:
 
 
 def build_timeline(sched: str, use_sem: bool) -> tuple[list[AnimationEvent], float, list]:
-    wl = WorkloadConfig(num_jobs=12, arrival_pattern="bursty", cook_time_dist="mix", seed=123)
+    wl = WorkloadConfig(num_jobs=12, arrival_pattern="stress", cook_time_dist="mix", seed=123)
     jobs = generate_jobs(wl)
     res = run_simulation(jobs, RunConfig(num_workers=4, scheduler=sched, use_semaphore=use_sem))
     events: list[AnimationEvent] = []
@@ -66,7 +66,7 @@ class KitchenPage:
         self.legend = ft.Text("Fila → Fogão (seção crítica) → Prontos. Chef pega o pedido na Fila, cozinha no Fogão (1 por vez com semáforo), e entrega em Prontos.", size=12)
         self.status = ft.Row(controls=[
             ft.Chip(label=ft.Text("Fogão: Livre"), bgcolor="#e8f5e9"),
-            ft.Chip(label=ft.Text("Colisões: 0"), bgcolor="#ffebee", color="#b71c1c"),
+            ft.Chip(label=ft.Text("Colisões: 0"), bgcolor="#ffebee", color="#b71c1c24"),
         ], spacing=10)
         self.page.add(self.controls_row, self.legend, self.status, self.stack)
 
@@ -133,13 +133,14 @@ class KitchenPage:
         # reset colisões
         self.collisions_count = 0
         self._update_collision_chip()
-        # jobs info map
-        self.jobs_info = {j.id: {"arrival": j.arrival_time, "ready": j.ready_time, "cook": j.cook_time, "start": j.start_time, "finish": j.finish_time} for j in jobs}
+        # jobs info map - filtra apenas jobs com ID válido (maior que 0)
+        self.jobs_info = {j.id: {"arrival": j.arrival_time, "ready": j.ready_time, "cook": j.cook_time, "start": j.start_time, "finish": j.finish_time} for j in jobs if j.id > 0}
         self.job_dots.clear()
-        # Create dots
-        ids = sorted({e.job_id for e in self.events if e.job_id is not None and e.job_id >= 0})
-        for jid in ids:
-            y = self.y_base - jid * self.row_h
+        # Create dots - filtra IDs válidos (maior que 0)
+        ids = sorted({e.job_id for e in self.events if e.job_id is not None and e.job_id > 0})
+        for i, jid in enumerate(ids):
+            # Usa índice sequencial em vez do ID para posicionamento
+            y = self.y_base - (i * self.row_h)
             info = getattr(self, "jobs_info", {}).get(jid, {})
             tip = f"Pedido {jid}\nchegada={info.get('arrival', 0):.2f}\ncozimento={info.get('cook', 0):.2f}"
             dot = ft.Container(left=self.queue_x-12, top=y-12, width=24, height=24, bgcolor="#1976D2", border_radius=12,
@@ -165,6 +166,9 @@ class KitchenPage:
             await asyncio.sleep(0.03)
 
     def _apply_event(self, ev: AnimationEvent) -> None:
+        # Ignora eventos de jobs com ID inválido, EXCETO colisões
+        if ev.job_id <= 0 and ev.kind != "collision":
+            return
         dot = self.job_dots.get(ev.job_id)
         # Chef move/le evento de colisão
         if ev.kind == "chef_pick" and ev.chef_id is not None:
@@ -210,7 +214,7 @@ class KitchenPage:
             self.status.controls[0] = ft.Chip(label=ft.Text("Fogão: Ocupado"), bgcolor="#fff3e0", color="#e65100")
         else:
             self.status.controls[0] = ft.Chip(label=ft.Text("Fogão: Livre"), bgcolor="#e8f5e9")
-    
+
     def _update_collision_chip(self) -> None:
         self.status.controls[1] = ft.Chip(label=ft.Text(f"Colisões: {self.collisions_count}"), bgcolor="#ffebee", color="#b71c1c")
 
@@ -223,9 +227,12 @@ class KitchenPage:
         self._rebuild_table()
 
     def _rebuild_table(self) -> None:
-        # Build list with computed order indexes
+        # Build list with computed order indexes - filtra apenas jobs válidos
         jobs = []
         for jid, info in self.jobs_info.items():
+            # Ignora jobs com ID inválido (0 ou menor)
+            if jid <= 0:
+                continue
             arrival = info.get("arrival")
             ready = info.get("ready", info.get("arrival"))
             start = info.get("start")

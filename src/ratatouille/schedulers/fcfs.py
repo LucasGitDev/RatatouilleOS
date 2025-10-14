@@ -13,6 +13,10 @@ class FCFSScheduler:
     def push(self, job: Job) -> None:
         self._queue.append(job)
 
+    def push_front(self, job: Job) -> None:
+        """Adiciona job no início da fila (para devolver jobs rejeitados pelo semáforo)"""
+        self._queue.appendleft(job)
+
     def pop(self) -> Optional[Job]:
         if not self._queue:
             return None
