@@ -44,6 +44,9 @@ def run_simulation(jobs: List[Job], config: RunConfig) -> RunResult:
     pending = sorted(jobs, key=lambda j: j.arrival_time)
     current_time = 0.0
 
+    # Contador para distribuir jobs entre os chefs
+    next_chef_id = 0
+
     # Simulação discreta com workers lógicos (não real time)
     # Loop até todos os jobs finalizarem
     while pending or len(sched) > 0 or any(j.finish_time is None for j in jobs):
@@ -75,27 +78,32 @@ def run_simulation(jobs: List[Job], config: RunConfig) -> RunResult:
             # Devolve demais jobs para o INÍCIO da fila, mantendo ordem FCFS
             for rest in reversed(picked[1:]):  # reversed para manter ordem
                 sched.push_front(rest)
-            # Chef mais simples: índice 0 neste tick
-            events.append(Event(timestamp=current_time, kind="chef_pick", job_id=job.id, chef_id=0))
+            # Atribui chef de forma rotativa
+            chef_id = next_chef_id % config.num_workers
+            next_chef_id += 1
+            events.append(Event(timestamp=current_time, kind="chef_pick", job_id=job.id, chef_id=chef_id))
             job.start_time = current_time
-            events.append(Event(timestamp=current_time, kind="job_start", job_id=job.id))
+            events.append(Event(timestamp=current_time, kind="job_start", job_id=job.id, chef_id=chef_id))
             current_time += job.cook_time
             job.finish_time = current_time
-            events.append(Event(timestamp=current_time, kind="job_finish", job_id=job.id))
+            events.append(Event(timestamp=current_time, kind="job_finish", job_id=job.id, chef_id=chef_id))
         else:
             # Sem semáforo: todos os picked tentam usar o fogão ao mesmo tempo
             # Simulamos colisões: se mais de 1 picked, contam overlaps.
             if len(picked) > 1:
                 collisions += len(picked) - 1
             max_finish = current_time
-            for job in picked:
-                events.append(Event(timestamp=current_time, kind="chef_pick", job_id=job.id, chef_id=0))
+            for i, job in enumerate(picked):
+                # Atribui chef de forma rotativa
+                chef_id = (next_chef_id + i) % config.num_workers
+                events.append(Event(timestamp=current_time, kind="chef_pick", job_id=job.id, chef_id=chef_id))
                 job.start_time = current_time
-                events.append(Event(timestamp=current_time, kind="job_start", job_id=job.id))
+                events.append(Event(timestamp=current_time, kind="job_start", job_id=job.id, chef_id=chef_id))
                 finish = current_time + job.cook_time
                 max_finish = max(max_finish, finish)
                 job.finish_time = finish
-                events.append(Event(timestamp=finish, kind="job_finish", job_id=job.id))
+                events.append(Event(timestamp=finish, kind="job_finish", job_id=job.id, chef_id=chef_id))
+            next_chef_id += len(picked)
             if len(picked) > 1:
                 # Evento explícito de colisão para visual
                 events.append(Event(timestamp=current_time, kind="collision", job_id=None, chef_id=None))
